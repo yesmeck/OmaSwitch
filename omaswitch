@@ -11,6 +11,27 @@ bool_command() {
   "$@" >/dev/null 2>&1
 }
 
+hidden_files_enabled() {
+  if gsettings list-keys org.gnome.nautilus.preferences 2>/dev/null \
+      | grep -qx show-hidden-files; then
+    [[ "$(gsettings get org.gnome.nautilus.preferences show-hidden-files 2>/dev/null)" == "true" ]]
+  else
+    [[ "$(gsettings get org.gtk.Settings.FileChooser show-hidden 2>/dev/null)" == "true" ]]
+  fi
+}
+
+set_hidden_files() {
+  local value="$1"
+  if gsettings list-keys org.gnome.nautilus.preferences 2>/dev/null \
+      | grep -qx show-hidden-files; then
+    gsettings set org.gnome.nautilus.preferences show-hidden-files "$value"
+  fi
+  if gsettings list-keys org.gtk.Settings.FileChooser 2>/dev/null \
+      | grep -qx show-hidden; then
+    gsettings set org.gtk.Settings.FileChooser show-hidden "$value"
+  fi
+}
+
 status() {
   local wifi=false bluetooth=false nightlight=false awake=false dnd=false bar=true clean=false hidden_files=false
 
@@ -29,8 +50,7 @@ status() {
     | jq -e 'any(.[]; .specialWorkspace.name == "special:omaswitch-clean")' >/dev/null 2>&1 \
     && clean=true
 
-  [[ "$(gsettings get org.gnome.nautilus.preferences show-hidden-files 2>/dev/null)" == "true" ]] \
-    && hidden_files=true
+  hidden_files_enabled && hidden_files=true
 
   printf '{"wifi":%s,"bluetooth":%s,"nightlight":%s,"awake":%s,"dnd":%s,"bar":%s,"clean":%s,"hidden-files":%s}\n' \
     "$wifi" "$bluetooth" "$nightlight" "$awake" "$dnd" "$bar" "$clean" "$hidden_files"
@@ -48,11 +68,7 @@ toggle() {
     bar) omarchy toggle bar ;;
     clean) hyprctl dispatch togglespecialworkspace omaswitch-clean ;;
     hidden-files)
-      if [[ "$(gsettings get org.gnome.nautilus.preferences show-hidden-files 2>/dev/null)" == "true" ]]; then
-        gsettings set org.gnome.nautilus.preferences show-hidden-files false
-      else
-        gsettings set org.gnome.nautilus.preferences show-hidden-files true
-      fi
+      if hidden_files_enabled; then set_hidden_files false; else set_hidden_files true; fi
       ;;
     *) usage ;;
   esac
