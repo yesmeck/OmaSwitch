@@ -17,9 +17,10 @@ Omarchy's supported command-line interface.
 - Lock and Screen Saver quick actions
 
 Left-click the bar icon to open the panel. Right-click it to toggle Keep Awake.
-Select **Customize switches** at the bottom of the panel to open the settings
-window. Visibility choices are saved in the OmaSwitch bar entry and persist
-across shell restarts.
+Select **Customize switches** at the bottom of the panel to open the scrollable
+settings window. Use the checkboxes to choose which controls appear, and drag
+the handles to change their order. Visibility and ordering are saved in the
+OmaSwitch bar entry and persist across shell restarts.
 
 ## Install
 

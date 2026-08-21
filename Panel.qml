@@ -19,6 +19,14 @@ Panel {
   property string pending: ""
   property int revision: 0
 
+  ListModel { id: settingsModel }
+
+  Timer {
+    id: settingsSaveTimer
+    interval: 120
+    onTriggered: root.persistSettingsModel()
+  }
+
   readonly property var allSwitches: {
     var r = revision
     return [
@@ -35,13 +43,32 @@ Panel {
     ]
   }
 
-  readonly property var switches: {
-    var configured = settings && settings.visibleSwitches
+  readonly property var orderedSwitches: {
+    var configured = settings && settings.switchOrder
     if (!(configured instanceof Array)) return allSwitches
-    var visible = []
-    for (var i = 0; i < allSwitches.length; i++)
-      if (configured.indexOf(allSwitches[i].key) !== -1) visible.push(allSwitches[i])
-    return visible
+    var ordered = []
+    var seen = ({})
+    for (var i = 0; i < configured.length; i++) {
+      for (var j = 0; j < allSwitches.length; j++) {
+        if (allSwitches[j].key === configured[i] && !seen[configured[i]]) {
+          ordered.push(allSwitches[j])
+          seen[configured[i]] = true
+          break
+        }
+      }
+    }
+    for (var k = 0; k < allSwitches.length; k++)
+      if (!seen[allSwitches[k].key]) ordered.push(allSwitches[k])
+    return ordered
+  }
+
+  readonly property var switches: {
+    var visibleKeys = settings && settings.visibleSwitches
+    if (!(visibleKeys instanceof Array)) return orderedSwitches
+    var result = []
+    for (var i = 0; i < orderedSwitches.length; i++)
+      if (visibleKeys.indexOf(orderedSwitches[i].key) !== -1) result.push(orderedSwitches[i])
+    return result
   }
 
   function checked(key) { return state && state[key] === true }
@@ -51,17 +78,35 @@ Panel {
     return !(configured instanceof Array) || configured.indexOf(key) !== -1
   }
 
-  function setSwitchVisible(key, visible) {
-    var keys = []
-    for (var i = 0; i < allSwitches.length; i++) {
-      var candidate = allSwitches[i].key
-      if (candidate === key ? visible : switchVisible(candidate)) keys.push(candidate)
+  function populateSettingsModel() {
+    settingsModel.clear()
+    for (var i = 0; i < orderedSwitches.length; i++) {
+      var item = orderedSwitches[i]
+      settingsModel.append({
+        controlKey: item.key,
+        controlLabel: item.label,
+        controlIcon: item.icon || "",
+        controlIconSource: String(item.iconSource || ""),
+        shown: switchVisible(item.key)
+      })
+    }
+  }
+
+  function persistSettingsModel() {
+    var order = []
+    var visible = []
+    for (var i = 0; i < settingsModel.count; i++) {
+      var item = settingsModel.get(i)
+      order.push(item.controlKey)
+      if (item.shown) visible.push(item.controlKey)
     }
 
     var entry = { id: moduleName }
     for (var existing in settings)
-      if (existing !== "id" && existing !== "visibleSwitches") entry[existing] = settings[existing]
-    entry.visibleSwitches = keys
+      if (existing !== "id" && existing !== "visibleSwitches" && existing !== "switchOrder")
+        entry[existing] = settings[existing]
+    entry.visibleSwitches = visible
+    entry.switchOrder = order
     settings = entry
     if (bar && bar.shell && typeof bar.shell.updateEntryInline === "function")
       bar.shell.updateEntryInline(moduleName, entry)
@@ -69,6 +114,7 @@ Panel {
 
   function openSettings() {
     close()
+    populateSettingsModel()
     settingsWindow.visible = true
     Qt.callLater(function() { settingsFocus.forceActiveFocus() })
   }
@@ -321,24 +367,144 @@ Panel {
           }
         }
 
-        Column {
+        ScrollView {
           width: parent.width
-          spacing: Style.space(6)
+          height: parent.height - y
+          clip: true
+          ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+          ScrollBar.vertical.policy: ScrollBar.AsNeeded
 
-          Repeater {
-            model: root.allSwitches
+          ListView {
+            id: settingsList
+            spacing: Style.space(6)
+            boundsBehavior: Flickable.StopAtBounds
+            model: settingsModel
 
-            delegate: SwitchTile {
-              required property var modelData
-              width: parent.width
-              icon: modelData.icon || ""
-              iconSource: modelData.iconSource || ""
-              label: modelData.label
-              detail: checked ? "Shown in panel" : "Hidden from panel"
-              checked: root.switchVisible(modelData.key)
-              foreground: Color.foreground
-              fontFamily: Style.font.family
-              onToggled: root.setSwitchVisible(modelData.key, !checked)
+            displaced: Transition {
+              NumberAnimation { properties: "x,y"; duration: 140; easing.type: Easing.OutCubic }
+            }
+
+            delegate: DropArea {
+              id: dropTarget
+              required property int index
+              required property string controlKey
+              required property string controlLabel
+              required property string controlIcon
+              required property string controlIconSource
+              required property bool shown
+
+              width: settingsList.width
+              height: Style.space(56)
+
+              onEntered: function(drag) {
+                if (!drag.source || drag.source.dragIndex === index) return
+                var from = drag.source.dragIndex
+                settingsModel.move(from, index, 1)
+                drag.source.dragIndex = index
+                settingsSaveTimer.restart()
+              }
+
+              BorderSurface {
+                id: settingsRow
+                property int dragIndex: dropTarget.index
+                width: dropTarget.width
+                height: dropTarget.height
+                radius: Style.cornerRadius
+                color: Style.normalFillFor(Color.foreground, Color.accent)
+                borderSpec: Border.controlSpec(dragHandler.active ? "hover-cursor" : "normal", Color.foreground, Color.accent)
+                z: dragHandler.active ? 10 : 0
+
+                Drag.active: dragHandler.active
+                Drag.source: settingsRow
+                Drag.hotSpot.x: width / 2
+                Drag.hotSpot.y: height / 2
+
+                Row {
+                  anchors.fill: parent
+                  anchors.leftMargin: Style.space(10)
+                  anchors.rightMargin: Style.space(10)
+                  spacing: Style.space(10)
+
+                  CheckBox {
+                    id: visibilityCheck
+                    anchors.verticalCenter: parent.verticalCenter
+                    checked: dropTarget.shown
+                    onToggled: {
+                      settingsModel.setProperty(dropTarget.index, "shown", checked)
+                      root.persistSettingsModel()
+                    }
+                  }
+
+                  Item {
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: Style.font.title * 1.35
+                    height: width
+
+                    Image {
+                      anchors.fill: parent
+                      visible: dropTarget.controlIconSource !== ""
+                      source: dropTarget.controlIconSource
+                      fillMode: Image.PreserveAspectFit
+                      smooth: true
+                      layer.enabled: visible
+                      layer.effect: MultiEffect {
+                        colorization: 1
+                        colorizationColor: Color.foreground
+                      }
+                    }
+
+                    Text {
+                      anchors.centerIn: parent
+                      visible: dropTarget.controlIconSource === ""
+                      text: dropTarget.controlIcon
+                      color: Color.foreground
+                      font.family: Style.font.family
+                      font.pixelSize: Style.font.title * 1.35
+                    }
+                  }
+
+                  Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: parent.width - visibilityCheck.width - Style.space(88)
+                    text: dropTarget.controlLabel
+                    color: Color.foreground
+                    font.family: Style.font.family
+                    font.pixelSize: Style.font.subtitle
+                    font.bold: true
+                    elide: Text.ElideRight
+                  }
+
+                  Item {
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: Style.space(30)
+                    height: parent.height
+
+                    Text {
+                      anchors.centerIn: parent
+                      text: "󰁝"
+                      color: Color.foreground
+                      opacity: 0.6
+                      font.family: Style.font.family
+                      font.pixelSize: Style.font.title
+                    }
+
+                    DragHandler {
+                      id: dragHandler
+                      target: settingsRow
+                      acceptedButtons: Qt.LeftButton
+                      onActiveChanged: {
+                        if (active) settingsRow.dragIndex = dropTarget.index
+                        else settingsSaveTimer.restart()
+                      }
+                    }
+                  }
+                }
+
+                states: State {
+                  when: dragHandler.active
+                  ParentChange { target: settingsRow; parent: settingsFocus }
+                }
+              }
             }
           }
         }
