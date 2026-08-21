@@ -480,13 +480,19 @@ Panel {
                     width: Style.space(30)
                     height: parent.height
 
-                    Text {
+                    Image {
                       anchors.centerIn: parent
-                      text: "󰁝"
-                      color: Color.foreground
+                      width: Style.font.title
+                      height: width
+                      source: Qt.resolvedUrl("assets/drag-handle.svg")
+                      fillMode: Image.PreserveAspectFit
+                      smooth: true
                       opacity: 0.6
-                      font.family: Style.font.family
-                      font.pixelSize: Style.font.title
+                      layer.enabled: true
+                      layer.effect: MultiEffect {
+                        colorization: 1
+                        colorizationColor: Color.foreground
+                      }
                     }
 
                     DragHandler {
