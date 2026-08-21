@@ -13,7 +13,7 @@ Omarchy's supported command-line interface.
 - Do Not Disturb
 - Omarchy bar visibility
 - Screen Clean workspace
-- Hidden files in Nautilus and GTK file pickers
+- Hidden files in open Nautilus windows and GTK file pickers
 - Lock and Screen Saver quick actions
 
 Left-click the bar icon to open the panel. Right-click it to toggle Keep Awake.

@@ -11,6 +11,7 @@ Panel {
   id: root
   moduleName: "wei.omaswitch"
   ipcTarget: "wei.omaswitch"
+  manageIpc: false
 
   readonly property string pluginDir: Qt.resolvedUrl(".").toString().replace(/^file:\/\//, "").replace(/\/$/, "")
   readonly property string helper: pluginDir + "/omaswitch"
@@ -85,6 +86,14 @@ Panel {
       root.pending = ""
       root.refresh()
     }
+  }
+
+  IpcHandler {
+    target: "wei.omaswitch"
+
+    function open() { root.open() }
+    function close() { root.close() }
+    function toggle() { root.toggle() }
   }
 
   implicitWidth: button.implicitWidth

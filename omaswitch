@@ -12,20 +12,34 @@ bool_command() {
 }
 
 hidden_files_enabled() {
-  if gsettings list-keys org.gnome.nautilus.preferences 2>/dev/null \
-      | grep -qx show-hidden-files; then
-    [[ "$(gsettings get org.gnome.nautilus.preferences show-hidden-files 2>/dev/null)" == "true" ]]
-  else
-    [[ "$(gsettings get org.gtk.Settings.FileChooser show-hidden 2>/dev/null)" == "true" ]]
-  fi
+  local state_home="${XDG_STATE_HOME:-${HOME}/.local/state}"
+  [[ -f "$state_home/omaswitch/hidden-files" ]]
 }
 
 set_hidden_files() {
   local value="$1"
-  if gsettings list-keys org.gnome.nautilus.preferences 2>/dev/null \
-      | grep -qx show-hidden-files; then
-    gsettings set org.gnome.nautilus.preferences show-hidden-files "$value"
+  local state_home="${XDG_STATE_HOME:-${HOME}/.local/state}"
+  local state_dir="$state_home/omaswitch"
+
+  mkdir -p "$state_dir"
+  if [[ "$value" == "true" ]]; then
+    : >"$state_dir/hidden-files"
+  else
+    rm -f "$state_dir/hidden-files"
   fi
+
+  # Nautilus 50 keeps hidden-file visibility as window state and ignores the
+  # old GSettings key while running. Ctrl+H is its authoritative action.
+  while IFS= read -r address; do
+    [[ -n "$address" ]] || continue
+    hyprctl dispatch \
+      "hl.dsp.send_shortcut({ mods = 'CTRL', key = 'H', window = 'address:$address' })" \
+      >/dev/null
+  done < <(hyprctl clients -j 2>/dev/null | jq -r '
+    .[] | select(.class == "org.gnome.Nautilus") | .address
+  ')
+
+  # GTK file pickers have a separate, persistent preference.
   if gsettings list-keys org.gtk.Settings.FileChooser 2>/dev/null \
       | grep -qx show-hidden; then
     gsettings set org.gtk.Settings.FileChooser show-hidden "$value"
