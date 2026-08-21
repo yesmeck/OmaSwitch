@@ -16,6 +16,7 @@ Panel {
   readonly property string pluginDir: Qt.resolvedUrl(".").toString().replace(/^file:\/\//, "").replace(/\/$/, "")
   readonly property string helper: pluginDir + "/omaswitch"
   property var state: ({ wifi: false, bluetooth: false, nightlight: false, awake: false, dnd: false, bar: true, clean: false, "hidden-files": false })
+  property var switchDefinitions: []
   property string pending: ""
   property int revision: 0
 
@@ -29,18 +30,7 @@ Panel {
 
   readonly property var allSwitches: {
     var r = revision
-    return [
-      { key: "wifi", icon: "󰖩", label: "Wi-Fi", on: "Connected", off: "Radio off" },
-      { key: "bluetooth", icon: "󰂯", label: "Bluetooth", on: "Available", off: "Radio off" },
-      { key: "nightlight", icon: "󰖔", label: "Night Light", on: "Warm display", off: "Normal color" },
-      { key: "awake", icon: "󰅶", label: "Keep Awake", on: "Idle paused", off: "Idle allowed" },
-      { key: "dnd", icon: "󰂛", label: "Do Not Disturb", on: "Notifications quiet", off: "Notifications on" },
-      { key: "bar", icon: "󰍜", label: "Omarchy Bar", on: "Visible", off: "Hidden" },
-      { key: "clean", icon: "󰃢", label: "Screen Clean", on: "Press Esc to exit", off: "Black focus screen" },
-      { key: "hidden-files", icon: "󰈈", label: "Hidden Files", on: "Files visible", off: "Files hidden" },
-      { key: "lock", iconSource: Qt.resolvedUrl("assets/lock.svg"), label: "Lock", action: true, off: "Lock the screen" },
-      { key: "screensaver", iconSource: Qt.resolvedUrl("assets/screensaver.svg"), label: "Screen Saver", action: true, off: "Start the screen saver" }
-    ]
+    return switchDefinitions || []
   }
 
   readonly property var orderedSwitches: {
@@ -126,11 +116,19 @@ Panel {
   }
 
   function refresh() {
+    if (!switchesProcess.running) switchesProcess.running = true
     if (!statusProcess.running) statusProcess.running = true
   }
 
   function toggleSwitch(key) {
-    if (key === "clean") {
+    var definition = null
+    for (var i = 0; i < allSwitches.length; i++) {
+      if (allSwitches[i].key === key) {
+        definition = allSwitches[i]
+        break
+      }
+    }
+    if (definition && definition.clientAction === "summonOverlay") {
       close()
       if (bar && bar.shell && typeof bar.shell.summon === "function")
         bar.shell.summon("wei.omaswitch", "{}")
@@ -158,6 +156,24 @@ Panel {
     running: root.opened
     repeat: true
     onTriggered: root.refresh()
+  }
+
+  Process {
+    id: switchesProcess
+    command: [root.helper, "switches"]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        try {
+          var definitions = JSON.parse(text.trim())
+          if (!(definitions instanceof Array)) throw new Error("expected an array")
+          root.switchDefinitions = definitions
+          root.revision++
+        } catch (error) {
+          console.warn("omaswitch: invalid switch definitions", text, error)
+        }
+      }
+    }
   }
 
   Process {

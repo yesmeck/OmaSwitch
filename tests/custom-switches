@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+helper="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/omaswitch"
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+
+export XDG_CONFIG_HOME="$tmp/config"
+export XDG_STATE_HOME="$tmp/state"
+export TEST_STATE="$tmp/custom-state"
+export TEST_ACTION="$tmp/custom-action"
+mkdir -p "$XDG_CONFIG_HOME/omaswitch" "$tmp/bin"
+
+cat >"$tmp/bin/custom-status" <<'EOF'
+#!/usr/bin/env bash
+[[ -f "$TEST_STATE" ]]
+EOF
+
+cat >"$tmp/bin/custom-toggle" <<'EOF'
+#!/usr/bin/env bash
+if [[ -f "$TEST_STATE" ]]; then rm "$TEST_STATE"; else touch "$TEST_STATE"; fi
+EOF
+
+cat >"$tmp/bin/custom-action" <<'EOF'
+#!/usr/bin/env bash
+printf '%s' "$1" >"$TEST_ACTION"
+EOF
+
+chmod +x "$tmp/bin/custom-status" "$tmp/bin/custom-toggle" "$tmp/bin/custom-action"
+
+cat >"$XDG_CONFIG_HOME/omaswitch/switches.json" <<EOF
+[
+  {
+    "id": "test-toggle",
+    "label": "Test Toggle",
+    "icon": "T",
+    "statusCommand": ["$tmp/bin/custom-status"],
+    "toggleCommand": ["$tmp/bin/custom-toggle"],
+    "onLabel": "Enabled",
+    "offLabel": "Disabled"
+  },
+  {
+    "id": "test-action",
+    "label": "Test Action",
+    "actionCommand": ["$tmp/bin/custom-action", "argument with spaces"]
+  },
+  {
+    "id": "wifi",
+    "label": "Reserved",
+    "statusCommand": ["true"],
+    "toggleCommand": ["true"]
+  },
+  {
+    "id": "invalid",
+    "label": "Missing command",
+    "statusCommand": ["true"]
+  }
+]
+EOF
+
+definitions="$("$helper" switches)"
+jq -e '
+  length == 12 and
+  .[0].key == "wifi" and
+  .[0].custom == false and
+  .[10] == {
+    "key": "test-toggle",
+    "label": "Test Toggle",
+    "icon": "T",
+    "iconSource": "",
+    "on": "Enabled",
+    "off": "Disabled",
+    "action": false,
+    "clientAction": "",
+    "custom": true
+  } and
+  .[11].key == "test-action" and
+  .[11].action == true
+' <<<"$definitions" >/dev/null
+
+jq -e '."test-toggle" == false' <<<"$("$helper" status)" >/dev/null
+"$helper" toggle test-toggle
+mkdir -p "$XDG_STATE_HOME/omaswitch"
+touch "$XDG_STATE_HOME/omaswitch/hidden-files"
+jq -e '
+  ."test-toggle" == true and
+  ."hidden-files" == true
+' <<<"$("$helper" status)" >/dev/null
+
+"$helper" action test-action
+[[ "$(<"$TEST_ACTION")" == "argument with spaces" ]]
+
+unset XDG_CONFIG_HOME
+export HOME="$tmp/home"
+mkdir -p "$HOME/.config/omaswitch"
+cat >"$HOME/.config/omaswitch/switches.json" <<EOF
+[
+  {
+    "id": "fallback-action",
+    "label": "Fallback Action",
+    "actionCommand": ["$tmp/bin/custom-action", "fallback"]
+  }
+]
+EOF
+
+jq -e '
+  any(.[]; .key == "fallback-action" and .custom == true)
+' <<<"$("$helper" switches)" >/dev/null

@@ -3,95 +3,137 @@
 set -u
 
 usage() {
-  printf 'Usage: %s status | toggle <wifi|bluetooth|nightlight|awake|dnd|bar|hidden-files> | action <lock|screensaver>\n' "$0" >&2
+  printf 'Usage: %s switches | status | toggle <switch-id> | action <action-id>\n' "$0" >&2
   exit 2
 }
 
-bool_command() {
-  "$@" >/dev/null 2>&1
+plugin_dir() {
+  cd "$(dirname "${BASH_SOURCE[0]}")" && pwd
 }
 
-hidden_files_enabled() {
-  local state_home="${XDG_STATE_HOME:-${HOME}/.local/state}"
-  [[ -f "$state_home/omaswitch/hidden-files" ]]
+built_in_switches_file() {
+  printf '%s/switches.json\n' "$(plugin_dir)"
 }
 
-set_hidden_files() {
-  local value="$1"
-  local state_home="${XDG_STATE_HOME:-${HOME}/.local/state}"
-  local state_dir="$state_home/omaswitch"
+custom_switches_file() {
+  printf '%s/omaswitch/switches.json\n' "${XDG_CONFIG_HOME:-${HOME}/.config}"
+}
 
-  mkdir -p "$state_dir"
-  if [[ "$value" == "true" ]]; then
-    : >"$state_dir/hidden-files"
-  else
-    rm -f "$state_dir/hidden-files"
-  fi
+valid_custom_entries() {
+  local config reserved
+  config="$(custom_switches_file)"
+  [[ -f "$config" ]] || return 0
+  reserved="$(jq -c '[.[].id]' "$(built_in_switches_file)")"
 
-  # Nautilus 50 keeps hidden-file visibility as window state and ignores the
-  # old GSettings key while running. Ctrl+H is its authoritative action.
-  while IFS= read -r address; do
-    [[ -n "$address" ]] || continue
-    hyprctl dispatch \
-      "hl.dsp.send_shortcut({ mods = 'CTRL', key = 'H', window = 'address:$address' })" \
-      >/dev/null
-  done < <(hyprctl clients -j 2>/dev/null | jq -r '
-    .[] | select(.class == "org.gnome.Nautilus") | .address
-  ')
+  jq -c --argjson reserved "$reserved" '
+    def command:
+      type == "array" and length > 0 and
+      (.[0] | type == "string" and length > 0) and
+      all(.[]; type == "string");
 
-  # GTK file pickers have a separate, persistent preference.
-  if gsettings list-keys org.gtk.Settings.FileChooser 2>/dev/null \
-      | grep -qx show-hidden; then
-    gsettings set org.gtk.Settings.FileChooser show-hidden "$value"
-  fi
+    if type != "array" then empty else
+      .[]
+      | select(type == "object")
+      | select((.id | type) == "string")
+      | select(.id | test("^[A-Za-z0-9][A-Za-z0-9._-]*$"))
+      | select(.id as $id | ($reserved | index($id)) == null)
+      | select((.label | type) == "string" and (.label | length) > 0)
+      | select(
+          if has("actionCommand") then
+            (.actionCommand | command)
+          else
+            (.statusCommand | command) and (.toggleCommand | command)
+          end
+        )
+    end
+  ' "$config" 2>/dev/null
+}
+
+all_switch_entries() {
+  jq -c '.[] | . + {custom: false}' "$(built_in_switches_file)"
+  valid_custom_entries | jq -c '. + {custom: true}'
+}
+
+switches() {
+  all_switch_entries | jq -sc '
+    reduce .[] as $item ([];
+      if any(.[]; .key == $item.id) then .
+      else . + [{
+        key: $item.id,
+        label: $item.label,
+        icon: ($item.icon // ""),
+        iconSource: ($item.iconSource // ""),
+        on: ($item.onLabel // "On"),
+        off: ($item.offLabel // (if $item.actionCommand then "Run action" else "Off" end)),
+        action: ($item.action == true or $item.actionCommand != null),
+        clientAction: ($item.clientAction // ""),
+        custom: $item.custom
+      }]
+      end
+    )
+  '
+}
+
+switch_entry() {
+  local id="$1"
+  all_switch_entries | jq -sc --arg id "$id" \
+    'first(.[] | select(.id == $id)) // empty'
+}
+
+run_json_command() {
+  local entry="$1"
+  local field="$2"
+  local -a command=()
+
+  mapfile -d '' -t command < <(
+    jq -j --arg field "$field" '.[$field][] | ., "\u0000"' <<<"$entry"
+  )
+  ((${#command[@]} > 0)) || return 1
+  local root i
+  root="$(plugin_dir)"
+  for i in "${!command[@]}"; do
+    command[$i]="${command[$i]//\$PLUGIN_DIR/$root}"
+  done
+  "${command[@]}"
 }
 
 status() {
-  local wifi=false bluetooth=false nightlight=false awake=false dnd=false bar=true hidden_files=false
+  local result entry id enabled
+  result='{}'
 
-  [[ "$(nmcli -t -f WIFI general 2>/dev/null)" == "enabled" ]] && wifi=true
-  bool_command omarchy bluetooth power is-on && bluetooth=true
-  omarchy toggle nightlight --status 2>/dev/null | jq -e '.enabled == true' >/dev/null 2>&1 && nightlight=true
-  omarchy toggle idle status 2>/dev/null | jq -e '.enabled == false' >/dev/null 2>&1 && awake=true
+  while IFS= read -r entry; do
+    [[ -n "$entry" ]] || continue
+    jq -e '(.action == true) or has("actionCommand") or has("clientAction")' \
+      <<<"$entry" >/dev/null && continue
+    id="$(jq -r '.id' <<<"$entry")"
+    enabled=false
+    run_json_command "$entry" statusCommand >/dev/null 2>&1 && enabled=true
+    result="$(jq -c --arg id "$id" --argjson enabled "$enabled" \
+      '. + {($id): $enabled}' <<<"$result")"
+  done < <(all_switch_entries)
 
-  local dnd_state
-  dnd_state="$(omarchy-shell notifications dndState 2>/dev/null || true)"
-  [[ "$dnd_state" == *true* || "$dnd_state" == *enabled* || "$dnd_state" == *on* ]] && dnd=true
-
-  bool_command omarchy toggle enabled bar-off && bar=false
-
-  hidden_files_enabled && hidden_files=true
-
-  printf '{"wifi":%s,"bluetooth":%s,"nightlight":%s,"awake":%s,"dnd":%s,"bar":%s,"clean":false,"hidden-files":%s}\n' \
-    "$wifi" "$bluetooth" "$nightlight" "$awake" "$dnd" "$bar" "$hidden_files"
+  printf '%s\n' "$result"
 }
 
 toggle() {
-  case "${1:-}" in
-    wifi)
-      if [[ "$(nmcli -t -f WIFI general 2>/dev/null)" == "enabled" ]]; then nmcli radio wifi off; else nmcli radio wifi on; fi
-      ;;
-    bluetooth) omarchy bluetooth power toggle ;;
-    nightlight) omarchy toggle nightlight ;;
-    awake) omarchy toggle idle ;;
-    dnd) omarchy toggle notification silencing ;;
-    bar) omarchy toggle bar ;;
-    hidden-files)
-      if hidden_files_enabled; then set_hidden_files false; else set_hidden_files true; fi
-      ;;
-    *) usage ;;
-  esac
+  local entry
+  entry="$(switch_entry "${1:-}")"
+  [[ -n "$entry" ]] || usage
+  jq -e 'has("toggleCommand") and (has("clientAction") | not)' \
+    <<<"$entry" >/dev/null || usage
+  run_json_command "$entry" toggleCommand
 }
 
 action() {
-  case "${1:-}" in
-    lock) omarchy system lock ;;
-    screensaver) omarchy launch screensaver force ;;
-    *) usage ;;
-  esac
+  local entry
+  entry="$(switch_entry "${1:-}")"
+  [[ -n "$entry" ]] || usage
+  jq -e 'has("actionCommand")' <<<"$entry" >/dev/null || usage
+  run_json_command "$entry" actionCommand
 }
 
 case "${1:-}" in
+  switches) switches ;;
   status) status ;;
   toggle) toggle "${2:-}" ;;
   action) action "${2:-}" ;;
