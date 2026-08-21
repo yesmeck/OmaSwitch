@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+
+set -u
+
+usage() {
+  printf 'Usage: %s status | toggle <wifi|bluetooth|nightlight|awake|dnd|bar|clean|hidden-files> | action <lock|screensaver>\n' "$0" >&2
+  exit 2
+}
+
+bool_command() {
+  "$@" >/dev/null 2>&1
+}
+
+status() {
+  local wifi=false bluetooth=false nightlight=false awake=false dnd=false bar=true clean=false hidden_files=false
+
+  [[ "$(nmcli -t -f WIFI general 2>/dev/null)" == "enabled" ]] && wifi=true
+  bool_command omarchy bluetooth power is-on && bluetooth=true
+  omarchy toggle nightlight --status 2>/dev/null | jq -e '.enabled == true' >/dev/null 2>&1 && nightlight=true
+  omarchy toggle idle status 2>/dev/null | jq -e '.enabled == false' >/dev/null 2>&1 && awake=true
+
+  local dnd_state
+  dnd_state="$(omarchy-shell notifications dndState 2>/dev/null || true)"
+  [[ "$dnd_state" == *true* || "$dnd_state" == *enabled* || "$dnd_state" == *on* ]] && dnd=true
+
+  bool_command omarchy toggle enabled bar-off && bar=false
+
+  hyprctl monitors -j 2>/dev/null \
+    | jq -e 'any(.[]; .specialWorkspace.name == "special:omaswitch-clean")' >/dev/null 2>&1 \
+    && clean=true
+
+  [[ "$(gsettings get org.gnome.nautilus.preferences show-hidden-files 2>/dev/null)" == "true" ]] \
+    && hidden_files=true
+
+  printf '{"wifi":%s,"bluetooth":%s,"nightlight":%s,"awake":%s,"dnd":%s,"bar":%s,"clean":%s,"hidden-files":%s}\n' \
+    "$wifi" "$bluetooth" "$nightlight" "$awake" "$dnd" "$bar" "$clean" "$hidden_files"
+}
+
+toggle() {
+  case "${1:-}" in
+    wifi)
+      if [[ "$(nmcli -t -f WIFI general 2>/dev/null)" == "enabled" ]]; then nmcli radio wifi off; else nmcli radio wifi on; fi
+      ;;
+    bluetooth) omarchy bluetooth power toggle ;;
+    nightlight) omarchy toggle nightlight ;;
+    awake) omarchy toggle idle ;;
+    dnd) omarchy toggle notification silencing ;;
+    bar) omarchy toggle bar ;;
+    clean) hyprctl dispatch togglespecialworkspace omaswitch-clean ;;
+    hidden-files)
+      if [[ "$(gsettings get org.gnome.nautilus.preferences show-hidden-files 2>/dev/null)" == "true" ]]; then
+        gsettings set org.gnome.nautilus.preferences show-hidden-files false
+      else
+        gsettings set org.gnome.nautilus.preferences show-hidden-files true
+      fi
+      ;;
+    *) usage ;;
+  esac
+}
+
+action() {
+  case "${1:-}" in
+    lock) omarchy system lock ;;
+    screensaver) omarchy launch screensaver ;;
+    *) usage ;;
+  esac
+}
+
+case "${1:-}" in
+  status) status ;;
+  toggle) toggle "${2:-}" ;;
+  action) action "${2:-}" ;;
+  *) usage ;;
+esac

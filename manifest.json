@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "wei.omaswitch",
+  "name": "OmaSwitch",
+  "version": "1.0.0",
+  "author": "Wei",
+  "license": "MIT",
+  "description": "A One Switch-inspired panel for common Omarchy controls.",
+  "kinds": ["bar-widget"],
+  "activation": "on-demand",
+  "entryPoints": {
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "OmaSwitch",
+    "description": "Wi-Fi, Bluetooth, night light, idle, notifications, and bar controls in one panel.",
+    "category": "System",
+    "aliases": ["switches", "control-center", "one-switch"],
+    "allowMultiple": false
+  }
+}
