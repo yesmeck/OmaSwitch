@@ -16,6 +16,7 @@ Panel {
   readonly property string pluginDir: Qt.resolvedUrl(".").toString().replace(/^file:\/\//, "").replace(/\/$/, "")
   readonly property string helper: pluginDir + "/omaswitch"
   property var state: ({ wifi: false, bluetooth: false, nightlight: false, awake: false, dnd: false, bar: true, clean: false, "hidden-files": false })
+  property var customSwitches: []
   property string pending: ""
   property int revision: 0
 
@@ -29,7 +30,7 @@ Panel {
 
   readonly property var allSwitches: {
     var r = revision
-    return [
+    var builtInSwitches = [
       { key: "wifi", icon: "󰖩", label: "Wi-Fi", on: "Connected", off: "Radio off" },
       { key: "bluetooth", icon: "󰂯", label: "Bluetooth", on: "Available", off: "Radio off" },
       { key: "nightlight", icon: "󰖔", label: "Night Light", on: "Warm display", off: "Normal color" },
@@ -41,6 +42,7 @@ Panel {
       { key: "lock", iconSource: Qt.resolvedUrl("assets/lock.svg"), label: "Lock", action: true, off: "Lock the screen" },
       { key: "screensaver", iconSource: Qt.resolvedUrl("assets/screensaver.svg"), label: "Screen Saver", action: true, off: "Start the screen saver" }
     ]
+    return builtInSwitches.concat(customSwitches || [])
   }
 
   readonly property var orderedSwitches: {
@@ -126,6 +128,7 @@ Panel {
   }
 
   function refresh() {
+    if (!switchesProcess.running) switchesProcess.running = true
     if (!statusProcess.running) statusProcess.running = true
   }
 
@@ -158,6 +161,24 @@ Panel {
     running: root.opened
     repeat: true
     onTriggered: root.refresh()
+  }
+
+  Process {
+    id: switchesProcess
+    command: [root.helper, "switches"]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        try {
+          var definitions = JSON.parse(text.trim())
+          if (!(definitions instanceof Array)) throw new Error("expected an array")
+          root.customSwitches = definitions
+          root.revision++
+        } catch (error) {
+          console.warn("omaswitch: invalid custom switches", text, error)
+        }
+      }
+    }
   }
 
   Process {

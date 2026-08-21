@@ -3,12 +3,86 @@
 set -u
 
 usage() {
-  printf 'Usage: %s status | toggle <wifi|bluetooth|nightlight|awake|dnd|bar|hidden-files> | action <lock|screensaver>\n' "$0" >&2
+  printf 'Usage: %s switches | status | toggle <switch-id> | action <action-id>\n' "$0" >&2
   exit 2
 }
 
 bool_command() {
   "$@" >/dev/null 2>&1
+}
+
+custom_switches_file() {
+  printf '%s/omaswitch/switches.json\n' "${XDG_CONFIG_HOME:-${HOME}/.config}"
+}
+
+valid_custom_entries() {
+  local config
+  config="$(custom_switches_file)"
+  [[ -f "$config" ]] || return 0
+
+  jq -c '
+    def command:
+      type == "array" and length > 0 and
+      (.[0] | type == "string" and length > 0) and
+      all(.[]; type == "string");
+    def reserved:
+      . == "wifi" or . == "bluetooth" or . == "nightlight" or
+      . == "awake" or . == "dnd" or . == "bar" or
+      . == "clean" or . == "hidden-files" or . == "lock" or
+      . == "screensaver";
+
+    if type != "array" then empty else
+      .[]
+      | select(type == "object")
+      | select((.id | type) == "string")
+      | select(.id | test("^[A-Za-z0-9][A-Za-z0-9._-]*$"))
+      | select(.id | reserved | not)
+      | select((.label | type) == "string" and (.label | length) > 0)
+      | select(
+          if has("actionCommand") then
+            (.actionCommand | command)
+          else
+            (.statusCommand | command) and (.toggleCommand | command)
+          end
+        )
+    end
+  ' "$config" 2>/dev/null
+}
+
+switches() {
+  valid_custom_entries | jq -sc '
+    reduce .[] as $item ([];
+      if any(.[]; .key == $item.id) then .
+      else . + [{
+        key: $item.id,
+        label: $item.label,
+        icon: ($item.icon // ""),
+        on: ($item.onLabel // "On"),
+        off: ($item.offLabel // (if $item.actionCommand then "Run action" else "Off" end)),
+        action: ($item.actionCommand != null),
+        custom: true
+      }]
+      end
+    )
+  '
+}
+
+custom_entry() {
+  local id="$1"
+  valid_custom_entries | jq -sc --arg id "$id" \
+    'first(.[] | select(.id == $id)) // empty'
+}
+
+run_json_command() {
+  local entry="$1"
+  local field="$2"
+  local -a command=()
+
+  mapfile -d '' -t command < <(
+    jq -j --arg field "$field" '.[$field][] | ., "\u0000"' <<<"$entry"
+  )
+  ((${#command[@]} > 0)) || return 1
+  "${command[@]}"
 }
 
 hidden_files_enabled() {
@@ -62,11 +136,25 @@ status() {
 
   hidden_files_enabled && hidden_files=true
 
-  printf '{"wifi":%s,"bluetooth":%s,"nightlight":%s,"awake":%s,"dnd":%s,"bar":%s,"clean":false,"hidden-files":%s}\n' \
-    "$wifi" "$bluetooth" "$nightlight" "$awake" "$dnd" "$bar" "$hidden_files"
+  local result entry id enabled
+  result="$(printf '{"wifi":%s,"bluetooth":%s,"nightlight":%s,"awake":%s,"dnd":%s,"bar":%s,"clean":false,"hidden-files":%s}' \
+    "$wifi" "$bluetooth" "$nightlight" "$awake" "$dnd" "$bar" "$hidden_files")"
+
+  while IFS= read -r entry; do
+    [[ -n "$entry" ]] || continue
+    [[ "$(jq -r 'has("actionCommand")' <<<"$entry")" == "true" ]] && continue
+    id="$(jq -r '.id' <<<"$entry")"
+    enabled=false
+    run_json_command "$entry" statusCommand >/dev/null 2>&1 && enabled=true
+    result="$(jq -c --arg id "$id" --argjson enabled "$enabled" \
+      '. + {($id): $enabled}' <<<"$result")"
+  done < <(valid_custom_entries)
+
+  printf '%s\n' "$result"
 }
 
 toggle() {
+  local entry
   case "${1:-}" in
     wifi)
       if [[ "$(nmcli -t -f WIFI general 2>/dev/null)" == "enabled" ]]; then nmcli radio wifi off; else nmcli radio wifi on; fi
@@ -79,19 +167,29 @@ toggle() {
     hidden-files)
       if hidden_files_enabled; then set_hidden_files false; else set_hidden_files true; fi
       ;;
-    *) usage ;;
+    *)
+      entry="$(custom_entry "${1:-}")"
+      [[ -n "$entry" && "$(jq -r 'has("actionCommand")' <<<"$entry")" == "false" ]] || usage
+      run_json_command "$entry" toggleCommand
+      ;;
   esac
 }
 
 action() {
+  local entry
   case "${1:-}" in
     lock) omarchy system lock ;;
     screensaver) omarchy launch screensaver force ;;
-    *) usage ;;
+    *)
+      entry="$(custom_entry "${1:-}")"
+      [[ -n "$entry" && "$(jq -r 'has("actionCommand")' <<<"$entry")" == "true" ]] || usage
+      run_json_command "$entry" actionCommand
+      ;;
   esac
 }
 
 case "${1:-}" in
+  switches) switches ;;
   status) status ;;
   toggle) toggle "${2:-}" ;;
   action) action "${2:-}" ;;
