@@ -81,9 +81,9 @@ installation directory, allowing a definition to invoke a bundled executable.
 
 Custom IDs may contain letters, numbers, `.`, `_`, and `-`. They must start
 with a letter or number and cannot duplicate a built-in ID. Invalid definitions
-are ignored. Custom controls automatically appear in **Customize switches**,
-where they can be hidden or reordered like built-in controls. OmaSwitch reloads
-the configuration while its panel is open.
+are ignored. New custom controls are visible by default and automatically appear
+in **Customize switches**, where they can be hidden or reordered like built-in
+controls. OmaSwitch reloads the configuration while its panel is open.
 
 ## Requirements
 

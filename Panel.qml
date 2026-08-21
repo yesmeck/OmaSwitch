@@ -6,6 +6,7 @@ import Quickshell
 import Quickshell.Io
 import qs.Commons
 import qs.Ui
+import "SwitchVisibility.js" as SwitchVisibility
 
 Panel {
   id: root
@@ -53,19 +54,18 @@ Panel {
   }
 
   readonly property var switches: {
-    var visibleKeys = settings && settings.visibleSwitches
-    if (!(visibleKeys instanceof Array)) return orderedSwitches
     var result = []
     for (var i = 0; i < orderedSwitches.length; i++)
-      if (visibleKeys.indexOf(orderedSwitches[i].key) !== -1) result.push(orderedSwitches[i])
+      if (switchVisible(orderedSwitches[i])) result.push(orderedSwitches[i])
     return result
   }
 
   function checked(key) { return state && state[key] === true }
 
-  function switchVisible(key) {
-    var configured = settings && settings.visibleSwitches
-    return !(configured instanceof Array) || configured.indexOf(key) !== -1
+  function switchVisible(control) {
+    var visible = settings && settings.visibleSwitches
+    var known = settings && settings.knownSwitches
+    return SwitchVisibility.isVisible(control, visible, known)
   }
 
   function populateSettingsModel() {
@@ -77,7 +77,7 @@ Panel {
         controlLabel: item.label,
         controlIcon: item.icon || "",
         controlIconSource: String(item.iconSource || ""),
-        shown: switchVisible(item.key)
+        shown: switchVisible(item)
       })
     }
   }
@@ -93,10 +93,12 @@ Panel {
 
     var entry = { id: moduleName }
     for (var existing in settings)
-      if (existing !== "id" && existing !== "visibleSwitches" && existing !== "switchOrder")
+      if (existing !== "id" && existing !== "visibleSwitches" &&
+          existing !== "switchOrder" && existing !== "knownSwitches")
         entry[existing] = settings[existing]
     entry.visibleSwitches = visible
     entry.switchOrder = order
+    entry.knownSwitches = order
     settings = entry
     if (bar && bar.shell && typeof bar.shell.updateEntryInline === "function")
       bar.shell.updateEntryInline(moduleName, entry)
