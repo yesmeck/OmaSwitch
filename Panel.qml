@@ -329,6 +329,7 @@ Panel {
 
   FloatingWindow {
     id: settingsWindow
+    visible: false
     title: "OmaSwitch Settings"
     color: Color.background
     implicitWidth: Style.space(420)
