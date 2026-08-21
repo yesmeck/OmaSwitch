@@ -115,8 +115,14 @@ Panel {
   function openSettings() {
     close()
     populateSettingsModel()
-    settingsWindow.visible = true
-    Qt.callLater(function() { settingsFocus.forceActiveFocus() })
+    settingsWindowLoader.active = false
+    Qt.callLater(function() {
+      settingsWindowLoader.active = true
+      Qt.callLater(function() {
+        if (settingsWindowLoader.item && settingsWindowLoader.item.focusTarget)
+          settingsWindowLoader.item.focusTarget.forceActiveFocus()
+      })
+    })
   }
 
   function refresh() {
@@ -327,26 +333,36 @@ Panel {
     }
   }
 
-  FloatingWindow {
-    id: settingsWindow
-    visible: false
-    title: "OmaSwitch Settings"
-    color: Color.background
-    implicitWidth: Style.space(420)
-    implicitHeight: Style.space(700)
-    minimumSize: Qt.size(360, 520)
+  Loader {
+    id: settingsWindowLoader
+    active: false
 
-    FocusScope {
-      id: settingsFocus
-      anchors.fill: parent
-      anchors.margins: Style.space(24)
-      focus: true
+    sourceComponent: Component {
+      FloatingWindow {
+        id: settingsWindow
+        property alias focusTarget: settingsFocus
+        visible: true
+        title: "OmaSwitch Settings"
+        color: Color.background
+        implicitWidth: Style.space(420)
+        implicitHeight: Style.space(700)
+        minimumSize: Qt.size(360, 520)
 
-      Keys.onEscapePressed: settingsWindow.visible = false
+        onVisibleChanged: {
+          if (!visible) Qt.callLater(function() { settingsWindowLoader.active = false })
+        }
 
-      Column {
-        anchors.fill: parent
-        spacing: Style.space(16)
+        FocusScope {
+          id: settingsFocus
+          anchors.fill: parent
+          anchors.margins: Style.space(24)
+          focus: true
+
+          Keys.onEscapePressed: settingsWindow.visible = false
+
+          Column {
+            anchors.fill: parent
+            spacing: Style.space(16)
 
         Column {
           width: parent.width
@@ -513,6 +529,8 @@ Panel {
                 }
               }
             }
+          }
+        }
           }
         }
       }
