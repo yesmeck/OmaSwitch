@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Effects
 import qs.Commons
 import qs.Ui
 
@@ -6,6 +7,7 @@ BorderSurface {
   id: root
 
   property string icon: ""
+  property url iconSource: ""
   property string label: ""
   property string detail: ""
   property bool checked: false
@@ -19,23 +21,41 @@ BorderSurface {
   implicitWidth: Style.space(320)
   implicitHeight: Style.space(56)
   radius: Style.cornerRadius
-  color: checked
-    ? Style.selectedFillFor(foreground, accent)
-    : Style.normalFillFor(foreground, accent)
-  borderSpec: Border.controlSpec(mouse.containsMouse ? "hover-cursor" : (checked ? "selected" : "normal"), foreground, accent)
+  color: Style.normalFillFor(foreground, accent)
+  borderSpec: Border.controlSpec(mouse.containsMouse ? "hover-cursor" : "normal", foreground, accent)
 
   Behavior on color { ColorAnimation { duration: 120 } }
 
-  Text {
-    id: glyph
+  Item {
+    id: iconContainer
     anchors.left: parent.left
     anchors.verticalCenter: parent.verticalCenter
     anchors.leftMargin: Style.space(12)
-    text: root.icon
-    color: root.foreground
+    width: Style.font.title * 1.45
+    height: width
     opacity: root.busy ? 0.45 : 1
-    font.family: root.fontFamily
-    font.pixelSize: Style.font.title * 1.45
+
+    Image {
+      anchors.fill: parent
+      visible: String(root.iconSource) !== ""
+      source: root.iconSource
+      fillMode: Image.PreserveAspectFit
+      smooth: true
+      layer.enabled: visible
+      layer.effect: MultiEffect {
+        colorization: 1
+        colorizationColor: root.foreground
+      }
+    }
+
+    Text {
+      anchors.centerIn: parent
+      visible: String(root.iconSource) === ""
+      text: root.icon
+      color: root.foreground
+      font.family: root.fontFamily
+      font.pixelSize: Style.font.title * 1.45
+    }
   }
 
   ToggleSwitch {
@@ -52,7 +72,7 @@ BorderSurface {
   }
 
   Column {
-    anchors.left: glyph.right
+    anchors.left: iconContainer.right
     anchors.leftMargin: Style.space(12)
     anchors.right: parent.right
     anchors.rightMargin: Style.space(58)

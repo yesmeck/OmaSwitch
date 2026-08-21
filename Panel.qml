@@ -29,7 +29,9 @@ Panel {
       { key: "dnd", icon: "󰂛", label: "Do Not Disturb", on: "Notifications quiet", off: "Notifications on" },
       { key: "bar", icon: "󰍜", label: "Omarchy Bar", on: "Visible", off: "Hidden" },
       { key: "clean", icon: "󰃢", label: "Screen Clean", on: "Press Esc to exit", off: "Black focus screen" },
-      { key: "hidden-files", icon: "󰈈", label: "Hidden Files", on: "Files visible", off: "Files hidden" }
+      { key: "hidden-files", icon: "󰈈", label: "Hidden Files", on: "Files visible", off: "Files hidden" },
+      { key: "lock", iconSource: Qt.resolvedUrl("assets/lock.svg"), label: "Lock", action: true, off: "Lock the screen" },
+      { key: "screensaver", iconSource: Qt.resolvedUrl("assets/screensaver.svg"), label: "Screen Saver", action: true, off: "Start the screen saver" }
     ]
   }
 
@@ -189,74 +191,16 @@ Panel {
             required property var modelData
             width: content.width
             icon: modelData.icon
+            iconSource: modelData.iconSource || ""
             label: modelData.label
-            checked: root.checked(modelData.key)
+            checked: !modelData.action && root.checked(modelData.key)
             detail: checked ? modelData.on : modelData.off
             busy: root.pending === modelData.key
             foreground: root.bar.foreground
             fontFamily: root.bar.fontFamily
-            onToggled: root.toggleSwitch(modelData.key)
-          }
-        }
-      }
-
-      Row {
-        width: parent.width
-        spacing: Style.space(8)
-
-        Repeater {
-          model: [
-            { key: "lock", icon: "", iconSource: Qt.resolvedUrl("assets/lock.svg"), label: "Lock" },
-            { key: "screensaver", icon: "", iconSource: Qt.resolvedUrl("assets/screensaver.svg"), label: "Screen Saver" }
-          ]
-          delegate: BorderSurface {
-            required property var modelData
-            width: (content.width - Style.space(8)) / 2
-            implicitHeight: Style.space(42)
-            radius: Style.cornerRadius
-            color: Style.normalFillFor(root.bar.foreground, Color.accent)
-            borderSpec: Border.controlSpec(actionMouse.containsMouse ? "hover-cursor" : "normal", root.bar.foreground, Color.accent)
-
-            Row {
-              anchors.centerIn: parent
-              spacing: Style.space(7)
-
-              Item {
-                width: Style.font.subtitle
-                height: width
-
-                Image {
-                  anchors.fill: parent
-                  visible: String(modelData.iconSource || "") !== ""
-                  source: modelData.iconSource
-                  fillMode: Image.PreserveAspectFit
-                  smooth: true
-                  layer.enabled: visible
-                  layer.effect: MultiEffect {
-                    colorization: 1
-                    colorizationColor: root.bar.foreground
-                  }
-                }
-
-                Text {
-                  anchors.centerIn: parent
-                  visible: String(modelData.iconSource || "") === ""
-                  text: modelData.icon
-                  color: root.bar.foreground
-                  font.family: root.bar.fontFamily
-                  font.pixelSize: Style.font.subtitle
-                }
-              }
-
-              Text { text: modelData.label; color: root.bar.foreground; font.family: root.bar.fontFamily; font.pixelSize: Style.font.caption; font.bold: true }
-            }
-
-            MouseArea {
-              id: actionMouse
-              anchors.fill: parent
-              hoverEnabled: true
-              cursorShape: Qt.PointingHandCursor
-              onClicked: root.runAction(modelData.key)
+            onToggled: {
+              if (modelData.action) root.runAction(modelData.key)
+              else root.toggleSwitch(modelData.key)
             }
           }
         }
