@@ -11,32 +11,32 @@ bool_command() {
   "$@" >/dev/null 2>&1
 }
 
+built_in_switches_file() {
+  printf '%s/switches.json\n' "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+}
+
 custom_switches_file() {
   printf '%s/omaswitch/switches.json\n' "${XDG_CONFIG_HOME:-${HOME}/.config}"
 }
 
 valid_custom_entries() {
-  local config
+  local config reserved
   config="$(custom_switches_file)"
   [[ -f "$config" ]] || return 0
+  reserved="$(jq -c '[.[].id]' "$(built_in_switches_file)")"
 
-  jq -c '
+  jq -c --argjson reserved "$reserved" '
     def command:
       type == "array" and length > 0 and
       (.[0] | type == "string" and length > 0) and
       all(.[]; type == "string");
-    def reserved:
-      . == "wifi" or . == "bluetooth" or . == "nightlight" or
-      . == "awake" or . == "dnd" or . == "bar" or
-      . == "clean" or . == "hidden-files" or . == "lock" or
-      . == "screensaver";
 
     if type != "array" then empty else
       .[]
       | select(type == "object")
       | select((.id | type) == "string")
       | select(.id | test("^[A-Za-z0-9][A-Za-z0-9._-]*$"))
-      | select(.id | reserved | not)
+      | select(.id as $id | ($reserved | index($id)) == null)
       | select((.label | type) == "string" and (.label | length) > 0)
       | select(
           if has("actionCommand") then
@@ -49,18 +49,24 @@ valid_custom_entries() {
   ' "$config" 2>/dev/null
 }
 
+all_switch_entries() {
+  jq -c '.[] | . + {custom: false}' "$(built_in_switches_file)"
+  valid_custom_entries | jq -c '. + {custom: true}'
+}
+
 switches() {
-  valid_custom_entries | jq -sc '
+  all_switch_entries | jq -sc '
     reduce .[] as $item ([];
       if any(.[]; .key == $item.id) then .
       else . + [{
         key: $item.id,
         label: $item.label,
         icon: ($item.icon // ""),
+        iconSource: ($item.iconSource // ""),
         on: ($item.onLabel // "On"),
         off: ($item.offLabel // (if $item.actionCommand then "Run action" else "Off" end)),
-        action: ($item.actionCommand != null),
-        custom: true
+        action: ($item.action == true or $item.actionCommand != null),
+        custom: $item.custom
       }]
       end
     )

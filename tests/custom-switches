@@ -61,18 +61,21 @@ EOF
 
 definitions="$("$helper" switches)"
 jq -e '
-  length == 2 and
-  .[0] == {
+  length == 12 and
+  .[0].key == "wifi" and
+  .[0].custom == false and
+  .[10] == {
     "key": "test-toggle",
     "label": "Test Toggle",
     "icon": "T",
+    "iconSource": "",
     "on": "Enabled",
     "off": "Disabled",
     "action": false,
     "custom": true
   } and
-  .[1].key == "test-action" and
-  .[1].action == true
+  .[11].key == "test-action" and
+  .[11].action == true
 ' <<<"$definitions" >/dev/null
 
 jq -e '."test-toggle" == false' <<<"$("$helper" status)" >/dev/null
