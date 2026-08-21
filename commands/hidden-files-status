@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+
+state_home="${XDG_STATE_HOME:-${HOME}/.local/state}"
+[[ -f "$state_home/omaswitch/hidden-files" ]]

@@ -121,7 +121,14 @@ Panel {
   }
 
   function toggleSwitch(key) {
-    if (key === "clean") {
+    var definition = null
+    for (var i = 0; i < allSwitches.length; i++) {
+      if (allSwitches[i].key === key) {
+        definition = allSwitches[i]
+        break
+      }
+    }
+    if (definition && definition.clientAction === "summonOverlay") {
       close()
       if (bar && bar.shell && typeof bar.shell.summon === "function")
         bar.shell.summon("wei.omaswitch", "{}")

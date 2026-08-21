@@ -41,8 +41,10 @@ after an action, so changes made elsewhere remain in sync.
 
 ## Custom switches
 
-Create `~/.config/omaswitch/switches.json` to add your own switches and action
-buttons. The file contains an array of definitions:
+Create `omaswitch/switches.json` under `$XDG_CONFIG_HOME` to add your own
+switches and action buttons. If `XDG_CONFIG_HOME` is unset, OmaSwitch uses the
+standard `~/.config/omaswitch/switches.json` path. The file contains an array of
+definitions:
 
 ```json
 [
@@ -72,6 +74,10 @@ state. Commands are arrays containing the executable followed by its arguments;
 they are executed directly, without implicit shell interpretation. To use shell
 syntax intentionally, specify it explicitly, for example
 `["bash", "-lc", "your command"]`.
+
+Built-in controls use the same command format in the plugin's bundled
+`switches.json`. In a command argument, `$PLUGIN_DIR` resolves to the plugin
+installation directory, allowing a definition to invoke a bundled executable.
 
 Custom IDs may contain letters, numbers, `.`, `_`, and `-`. They must start
 with a letter or number and cannot duplicate a built-in ID. Invalid definitions

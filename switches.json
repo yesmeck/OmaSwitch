@@ -3,6 +3,8 @@
     "id": "wifi",
     "icon": "󰖩",
     "label": "Wi-Fi",
+    "statusCommand": ["$PLUGIN_DIR/commands/wifi-status"],
+    "toggleCommand": ["$PLUGIN_DIR/commands/wifi-toggle"],
     "onLabel": "Connected",
     "offLabel": "Radio off"
   },
@@ -10,6 +12,8 @@
     "id": "bluetooth",
     "icon": "󰂯",
     "label": "Bluetooth",
+    "statusCommand": ["$PLUGIN_DIR/commands/bluetooth-status"],
+    "toggleCommand": ["omarchy", "bluetooth", "power", "toggle"],
     "onLabel": "Available",
     "offLabel": "Radio off"
   },
@@ -17,6 +21,8 @@
     "id": "nightlight",
     "icon": "󰖔",
     "label": "Night Light",
+    "statusCommand": ["$PLUGIN_DIR/commands/nightlight-status"],
+    "toggleCommand": ["omarchy", "toggle", "nightlight"],
     "onLabel": "Warm display",
     "offLabel": "Normal color"
   },
@@ -24,6 +30,8 @@
     "id": "awake",
     "icon": "󰅶",
     "label": "Keep Awake",
+    "statusCommand": ["$PLUGIN_DIR/commands/awake-status"],
+    "toggleCommand": ["omarchy", "toggle", "idle"],
     "onLabel": "Idle paused",
     "offLabel": "Idle allowed"
   },
@@ -31,6 +39,8 @@
     "id": "dnd",
     "icon": "󰂛",
     "label": "Do Not Disturb",
+    "statusCommand": ["$PLUGIN_DIR/commands/dnd-status"],
+    "toggleCommand": ["omarchy", "toggle", "notification", "silencing"],
     "onLabel": "Notifications quiet",
     "offLabel": "Notifications on"
   },
@@ -38,6 +48,8 @@
     "id": "bar",
     "icon": "󰍜",
     "label": "Omarchy Bar",
+    "statusCommand": ["$PLUGIN_DIR/commands/bar-status"],
+    "toggleCommand": ["omarchy", "toggle", "bar"],
     "onLabel": "Visible",
     "offLabel": "Hidden"
   },
@@ -45,6 +57,7 @@
     "id": "clean",
     "icon": "󰃢",
     "label": "Screen Clean",
+    "clientAction": "summonOverlay",
     "onLabel": "Press Esc to exit",
     "offLabel": "Black focus screen"
   },
@@ -52,6 +65,8 @@
     "id": "hidden-files",
     "icon": "󰈈",
     "label": "Hidden Files",
+    "statusCommand": ["$PLUGIN_DIR/commands/hidden-files-status"],
+    "toggleCommand": ["$PLUGIN_DIR/commands/hidden-files-toggle"],
     "onLabel": "Files visible",
     "offLabel": "Files hidden"
   },
@@ -60,6 +75,7 @@
     "iconSource": "assets/lock.svg",
     "label": "Lock",
     "action": true,
+    "actionCommand": ["omarchy", "system", "lock"],
     "offLabel": "Lock the screen"
   },
   {
@@ -67,6 +83,7 @@
     "iconSource": "assets/screensaver.svg",
     "label": "Screen Saver",
     "action": true,
+    "actionCommand": ["omarchy", "launch", "screensaver", "force"],
     "offLabel": "Start the screen saver"
   }
 ]

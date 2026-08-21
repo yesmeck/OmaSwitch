@@ -72,6 +72,7 @@ jq -e '
     "on": "Enabled",
     "off": "Disabled",
     "action": false,
+    "clientAction": "",
     "custom": true
   } and
   .[11].key == "test-action" and
@@ -80,7 +81,29 @@ jq -e '
 
 jq -e '."test-toggle" == false' <<<"$("$helper" status)" >/dev/null
 "$helper" toggle test-toggle
-jq -e '."test-toggle" == true' <<<"$("$helper" status)" >/dev/null
+mkdir -p "$XDG_STATE_HOME/omaswitch"
+touch "$XDG_STATE_HOME/omaswitch/hidden-files"
+jq -e '
+  ."test-toggle" == true and
+  ."hidden-files" == true
+' <<<"$("$helper" status)" >/dev/null
 
 "$helper" action test-action
 [[ "$(<"$TEST_ACTION")" == "argument with spaces" ]]
+
+unset XDG_CONFIG_HOME
+export HOME="$tmp/home"
+mkdir -p "$HOME/.config/omaswitch"
+cat >"$HOME/.config/omaswitch/switches.json" <<EOF
+[
+  {
+    "id": "fallback-action",
+    "label": "Fallback Action",
+    "actionCommand": ["$tmp/bin/custom-action", "fallback"]
+  }
+]
+EOF
+
+jq -e '
+  any(.[]; .key == "fallback-action" and .custom == true)
+' <<<"$("$helper" switches)" >/dev/null

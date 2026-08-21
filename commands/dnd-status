@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+
+state="$(omarchy-shell notifications dndState 2>/dev/null || true)"
+[[ "$state" == *true* || "$state" == *enabled* || "$state" == *on* ]]
