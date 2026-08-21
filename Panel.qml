@@ -19,7 +19,7 @@ Panel {
   property string pending: ""
   property int revision: 0
 
-  readonly property var switches: {
+  readonly property var allSwitches: {
     var r = revision
     return [
       { key: "wifi", icon: "󰖩", label: "Wi-Fi", on: "Connected", off: "Radio off" },
@@ -35,7 +35,43 @@ Panel {
     ]
   }
 
+  readonly property var switches: {
+    var configured = settings && settings.visibleSwitches
+    if (!(configured instanceof Array)) return allSwitches
+    var visible = []
+    for (var i = 0; i < allSwitches.length; i++)
+      if (configured.indexOf(allSwitches[i].key) !== -1) visible.push(allSwitches[i])
+    return visible
+  }
+
   function checked(key) { return state && state[key] === true }
+
+  function switchVisible(key) {
+    var configured = settings && settings.visibleSwitches
+    return !(configured instanceof Array) || configured.indexOf(key) !== -1
+  }
+
+  function setSwitchVisible(key, visible) {
+    var keys = []
+    for (var i = 0; i < allSwitches.length; i++) {
+      var candidate = allSwitches[i].key
+      if (candidate === key ? visible : switchVisible(candidate)) keys.push(candidate)
+    }
+
+    var entry = { id: moduleName }
+    for (var existing in settings)
+      if (existing !== "id" && existing !== "visibleSwitches") entry[existing] = settings[existing]
+    entry.visibleSwitches = keys
+    settings = entry
+    if (bar && bar.shell && typeof bar.shell.updateEntryInline === "function")
+      bar.shell.updateEntryInline(moduleName, entry)
+  }
+
+  function openSettings() {
+    close()
+    settingsWindow.visible = true
+    Qt.callLater(function() { settingsFocus.forceActiveFocus() })
+  }
 
   function refresh() {
     if (!statusProcess.running) statusProcess.running = true
@@ -102,6 +138,7 @@ Panel {
     function open() { root.open() }
     function close() { root.close() }
     function toggle() { root.toggle() }
+    function configure() { root.openSettings() }
   }
 
   implicitWidth: button.implicitWidth
@@ -201,6 +238,107 @@ Panel {
             onToggled: {
               if (modelData.action) root.runAction(modelData.key)
               else root.toggleSwitch(modelData.key)
+            }
+          }
+        }
+      }
+
+      BorderSurface {
+        width: parent.width
+        implicitHeight: Style.space(42)
+        radius: Style.cornerRadius
+        color: Style.normalFillFor(root.bar.foreground, Color.accent)
+        borderSpec: Border.controlSpec(settingsMouse.containsMouse ? "hover-cursor" : "normal", root.bar.foreground, Color.accent)
+
+        Row {
+          anchors.centerIn: parent
+          spacing: Style.space(8)
+
+          Text {
+            text: "󰒓"
+            color: root.bar.foreground
+            font.family: root.bar.fontFamily
+            font.pixelSize: Style.font.subtitle
+          }
+
+          Text {
+            text: "Customize switches"
+            color: root.bar.foreground
+            font.family: root.bar.fontFamily
+            font.pixelSize: Style.font.caption
+            font.bold: true
+          }
+        }
+
+        MouseArea {
+          id: settingsMouse
+          anchors.fill: parent
+          hoverEnabled: true
+          cursorShape: Qt.PointingHandCursor
+          onClicked: root.openSettings()
+        }
+      }
+    }
+  }
+
+  FloatingWindow {
+    id: settingsWindow
+    title: "OmaSwitch Settings"
+    color: Color.background
+    implicitWidth: Style.space(420)
+    implicitHeight: Style.space(700)
+    minimumSize: Qt.size(360, 520)
+
+    FocusScope {
+      id: settingsFocus
+      anchors.fill: parent
+      anchors.margins: Style.space(24)
+      focus: true
+
+      Keys.onEscapePressed: settingsWindow.visible = false
+
+      Column {
+        anchors.fill: parent
+        spacing: Style.space(16)
+
+        Column {
+          width: parent.width
+          spacing: Style.space(4)
+
+          Text {
+            text: "OmaSwitch Settings"
+            color: Color.foreground
+            font.family: Style.font.family
+            font.pixelSize: Style.font.display
+            font.bold: true
+          }
+
+          Text {
+            text: "Choose which controls appear in the switch panel."
+            color: Qt.darker(Color.foreground, 1.45)
+            font.family: Style.font.family
+            font.pixelSize: Style.font.subtitle
+          }
+        }
+
+        Column {
+          width: parent.width
+          spacing: Style.space(6)
+
+          Repeater {
+            model: root.allSwitches
+
+            delegate: SwitchTile {
+              required property var modelData
+              width: parent.width
+              icon: modelData.icon || ""
+              iconSource: modelData.iconSource || ""
+              label: modelData.label
+              detail: checked ? "Shown in panel" : "Hidden from panel"
+              checked: root.switchVisible(modelData.key)
+              foreground: Color.foreground
+              fontFamily: Style.font.family
+              onToggled: root.setSwitchVisible(modelData.key, !checked)
             }
           }
         }
