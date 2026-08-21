@@ -86,7 +86,7 @@ toggle() {
 action() {
   case "${1:-}" in
     lock) omarchy system lock ;;
-    screensaver) omarchy launch screensaver ;;
+    screensaver) omarchy launch screensaver force ;;
     *) usage ;;
   esac
 }
