@@ -25,7 +25,7 @@ OmaSwitch bar entry and persist across shell restarts.
 ## Install
 
 ```bash
-omarchy plugin add https://github.com/OWNER/omaswitch --enable
+omarchy plugin add https://github.com/yesmeck/OmaSwitch --enable
 ```
 
 For local development:
