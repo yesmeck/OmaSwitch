@@ -3,7 +3,7 @@
 set -u
 
 usage() {
-  printf 'Usage: %s status | toggle <wifi|bluetooth|nightlight|awake|dnd|bar|clean|hidden-files> | action <lock|screensaver>\n' "$0" >&2
+  printf 'Usage: %s status | toggle <wifi|bluetooth|nightlight|awake|dnd|bar|hidden-files> | action <lock|screensaver>\n' "$0" >&2
   exit 2
 }
 
@@ -47,7 +47,7 @@ set_hidden_files() {
 }
 
 status() {
-  local wifi=false bluetooth=false nightlight=false awake=false dnd=false bar=true clean=false hidden_files=false
+  local wifi=false bluetooth=false nightlight=false awake=false dnd=false bar=true hidden_files=false
 
   [[ "$(nmcli -t -f WIFI general 2>/dev/null)" == "enabled" ]] && wifi=true
   bool_command omarchy bluetooth power is-on && bluetooth=true
@@ -60,14 +60,10 @@ status() {
 
   bool_command omarchy toggle enabled bar-off && bar=false
 
-  hyprctl monitors -j 2>/dev/null \
-    | jq -e 'any(.[]; .specialWorkspace.name == "special:omaswitch-clean")' >/dev/null 2>&1 \
-    && clean=true
-
   hidden_files_enabled && hidden_files=true
 
-  printf '{"wifi":%s,"bluetooth":%s,"nightlight":%s,"awake":%s,"dnd":%s,"bar":%s,"clean":%s,"hidden-files":%s}\n' \
-    "$wifi" "$bluetooth" "$nightlight" "$awake" "$dnd" "$bar" "$clean" "$hidden_files"
+  printf '{"wifi":%s,"bluetooth":%s,"nightlight":%s,"awake":%s,"dnd":%s,"bar":%s,"clean":false,"hidden-files":%s}\n' \
+    "$wifi" "$bluetooth" "$nightlight" "$awake" "$dnd" "$bar" "$hidden_files"
 }
 
 toggle() {
@@ -80,7 +76,6 @@ toggle() {
     awake) omarchy toggle idle ;;
     dnd) omarchy toggle notification silencing ;;
     bar) omarchy toggle bar ;;
-    clean) hyprctl dispatch togglespecialworkspace omaswitch-clean ;;
     hidden-files)
       if hidden_files_enabled; then set_hidden_files false; else set_hidden_files true; fi
       ;;

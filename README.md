@@ -12,7 +12,7 @@ Omarchy's supported command-line interface.
 - Keep Awake
 - Do Not Disturb
 - Omarchy bar visibility
-- Screen Clean workspace
+- Full-screen black Screen Clean mode (`Esc` exits)
 - Hidden files in open Nautilus windows and GTK file pickers
 - Lock and Screen Saver quick actions
 

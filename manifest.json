@@ -6,10 +6,12 @@
   "author": "Wei",
   "license": "MIT",
   "description": "A One Switch-inspired panel for common Omarchy controls.",
-  "kinds": ["bar-widget"],
+  "kinds": ["bar-widget", "overlay"],
+  "keepLoaded": true,
   "activation": "on-demand",
   "entryPoints": {
-    "barWidget": "Panel.qml"
+    "barWidget": "Panel.qml",
+    "overlay": "CleanScreen.qml"
   },
   "barWidget": {
     "displayName": "OmaSwitch",

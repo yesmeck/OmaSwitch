@@ -28,7 +28,7 @@ Panel {
       { key: "awake", icon: "󰅶", label: "Keep Awake", on: "Idle paused", off: "Idle allowed" },
       { key: "dnd", icon: "󰂛", label: "Do Not Disturb", on: "Notifications quiet", off: "Notifications on" },
       { key: "bar", icon: "󰍜", label: "Omarchy Bar", on: "Visible", off: "Hidden" },
-      { key: "clean", icon: "󰃢", label: "Screen Clean", on: "Clean workspace", off: "Regular workspace" },
+      { key: "clean", icon: "󰃢", label: "Screen Clean", on: "Press Esc to exit", off: "Black focus screen" },
       { key: "hidden-files", icon: "󰈈", label: "Hidden Files", on: "Files visible", off: "Files hidden" }
     ]
   }
@@ -40,6 +40,12 @@ Panel {
   }
 
   function toggleSwitch(key) {
+    if (key === "clean") {
+      close()
+      if (bar && bar.shell && typeof bar.shell.summon === "function")
+        bar.shell.summon("wei.omaswitch", "{}")
+      return
+    }
     if (toggleProcess.running) return
     pending = key
     var next = Object.assign({}, state)
