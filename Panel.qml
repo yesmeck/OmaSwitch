@@ -232,8 +232,7 @@ Panel {
       }
     }
     onPressed: function(mouseButton) {
-      if (mouseButton === Qt.RightButton) root.toggleSwitch("awake")
-      else root.toggle()
+      if (mouseButton === Qt.LeftButton) root.toggle()
     }
   }
 
