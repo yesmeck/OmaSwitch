@@ -19,6 +19,8 @@ Panel {
   property var state: ({ wifi: false, bluetooth: false, nightlight: false, awake: false, dnd: false, bar: true, clean: false, "hidden-files": false })
   property var switchDefinitions: []
   property string pending: ""
+  property string toggleFailureDetail: ""
+  property string actionFailureDetail: ""
   property int revision: 0
 
   ListModel { id: settingsModel }
@@ -122,6 +124,25 @@ Panel {
     if (!statusProcess.running) statusProcess.running = true
   }
 
+  function switchLabel(key) {
+    for (var i = 0; i < allSwitches.length; i++)
+      if (allSwitches[i].key === key) return allSwitches[i].label
+    return key
+  }
+
+  function reportFailure(key, detail, exitCode) {
+    var message = detail || ("Command exited with status " + exitCode)
+    if (message.length > 600) message = message.substring(0, 597) + "..."
+    console.warn("omaswitch:", key, "failed:", message)
+    Quickshell.execDetached([
+      "notify-send",
+      "--app-name=OmaSwitch",
+      "--urgency=critical",
+      "OmaSwitch: " + switchLabel(key) + " failed",
+      message
+    ])
+  }
+
   function toggleSwitch(key) {
     var definition = null
     for (var i = 0; i < allSwitches.length; i++) {
@@ -136,8 +157,9 @@ Panel {
         bar.shell.summon("wei.omaswitch", "{}")
       return
     }
-    if (toggleProcess.running) return
+    if (toggleProcess.running || actionProcess.running) return
     pending = key
+    toggleFailureDetail = ""
     var next = Object.assign({}, state)
     next[key] = !checked(key)
     state = next
@@ -147,7 +169,11 @@ Panel {
   }
 
   function runAction(name) {
-    Quickshell.execDetached([helper, "action", name])
+    if (toggleProcess.running || actionProcess.running) return
+    pending = name
+    actionFailureDetail = ""
+    actionProcess.command = [helper, "action", name]
+    actionProcess.running = true
     close()
   }
 
@@ -196,9 +222,32 @@ Panel {
 
   Process {
     id: toggleProcess
-    onExited: {
+    stderr: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: root.toggleFailureDetail = text.trim()
+    }
+    onExited: function(exitCode, exitStatus) {
+      var key = root.pending
+      var detail = root.toggleFailureDetail
       root.pending = ""
+      if (exitCode !== 0)
+        Qt.callLater(function() { root.reportFailure(key, detail, exitCode) })
       root.refresh()
+    }
+  }
+
+  Process {
+    id: actionProcess
+    stderr: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: root.actionFailureDetail = text.trim()
+    }
+    onExited: function(exitCode, exitStatus) {
+      var key = root.pending
+      var detail = root.actionFailureDetail
+      root.pending = ""
+      if (exitCode !== 0)
+        Qt.callLater(function() { root.reportFailure(key, detail, exitCode) })
     }
   }
 

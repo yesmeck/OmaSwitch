@@ -74,6 +74,8 @@ state. Commands are arrays containing the executable followed by its arguments;
 they are executed directly, without implicit shell interpretation. To use shell
 syntax intentionally, specify it explicitly, for example
 `["bash", "-lc", "your command"]`.
+If a toggle or action command fails, OmaSwitch displays a desktop notification
+containing the command's standard error output.
 
 Built-in controls use the same command format in the plugin's bundled
 `switches.json`. In a command argument, `$PLUGIN_DIR` resolves to the plugin
@@ -88,7 +90,7 @@ controls. OmaSwitch reloads the configuration while its panel is open.
 ## Requirements
 
 OmaSwitch expects a current Omarchy installation and its standard `omarchy`,
-`omarchy-shell`, `nmcli`, `hyprctl`, and `jq` commands.
+`omarchy-shell`, `nmcli`, `hyprctl`, `jq`, and `notify-send` commands.
 
 ## License
 

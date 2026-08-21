@@ -27,7 +27,14 @@ cat >"$tmp/bin/custom-action" <<'EOF'
 printf '%s' "$1" >"$TEST_ACTION"
 EOF
 
-chmod +x "$tmp/bin/custom-status" "$tmp/bin/custom-toggle" "$tmp/bin/custom-action"
+cat >"$tmp/bin/custom-failure" <<'EOF'
+#!/usr/bin/env bash
+printf 'example command failure\n' >&2
+exit 23
+EOF
+
+chmod +x "$tmp/bin/custom-status" "$tmp/bin/custom-toggle" \
+  "$tmp/bin/custom-action" "$tmp/bin/custom-failure"
 
 cat >"$XDG_CONFIG_HOME/omaswitch/switches.json" <<EOF
 [
@@ -46,6 +53,11 @@ cat >"$XDG_CONFIG_HOME/omaswitch/switches.json" <<EOF
     "actionCommand": ["$tmp/bin/custom-action", "argument with spaces"]
   },
   {
+    "id": "test-failure",
+    "label": "Test Failure",
+    "actionCommand": ["$tmp/bin/custom-failure"]
+  },
+  {
     "id": "wifi",
     "label": "Reserved",
     "statusCommand": ["true"],
@@ -61,7 +73,7 @@ EOF
 
 definitions="$("$helper" switches)"
 jq -e '
-  length == 12 and
+  length == 13 and
   .[0].key == "wifi" and
   .[0].custom == false and
   .[10] == {
@@ -76,7 +88,9 @@ jq -e '
     "custom": true
   } and
   .[11].key == "test-action" and
-  .[11].action == true
+  .[11].action == true and
+  .[12].key == "test-failure" and
+  .[12].action == true
 ' <<<"$definitions" >/dev/null
 
 jq -e '."test-toggle" == false' <<<"$("$helper" status)" >/dev/null
@@ -90,6 +104,13 @@ jq -e '
 
 "$helper" action test-action
 [[ "$(<"$TEST_ACTION")" == "argument with spaces" ]]
+
+set +e
+failure_output="$("$helper" action test-failure 2>&1)"
+failure_status=$?
+set -e
+[[ "$failure_status" == 23 ]]
+[[ "$failure_output" == "example command failure" ]]
 
 unset XDG_CONFIG_HOME
 export HOME="$tmp/home"
